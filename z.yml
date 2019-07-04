@@ -1,0 +1,15 @@
+---
+description: Driver for SOLOMON SSD1306 Controller for B/W OLED display
+fullname: lib.solomon.ssd1306
+info:
+    chip_manufacturer: SOLOMON
+    chip_name: SSD1306
+    name: OLED B/W Display Driver
+    type: Actuator
+keywords:
+- solomon
+- oled
+- display
+- Black and White
+title: SSD1306 OLED display Controller
+...
