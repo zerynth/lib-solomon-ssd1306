@@ -19,9 +19,24 @@ sleep(1000)
 import zLogo
 
 try:
-    # Setup display 
+    # Setup display
+ 
+    # The ssd1306 can use either the spi or the i2c interface
+    # the flag SSD1306SPI enables the spi interface
+    # the flag SSD1306I2C enables the i2c interface
+    # those two flags can't be set both to true 
+
+    ssd = None
+
+    #-if SSD1306SPI
     # This setup is referred to ssd1306 mounted on slot A of a Flip n Click device
     ssd = ssd1306.SSD1306(SPI0,D17,D16,D6)
+    #-else
+    ##-if SSD1306I2C
+    # This setup is referred to ssd1306 mounted on a XinaBox CW02
+    ssd = ssd1306.SSD1306(I2C0)
+    ##-endif
+    #-endif
     ssd.init()
     ssd.on()
     ssd.clear()

@@ -1,0 +1,11 @@
+# configuration for ssd1306
+#
+#
+config: {}
+options:
+    SSD1306SPI:
+        help: >
+            If enabled, the ssd1306 will use the spi interface. IT CAN'T BE TRUE WHEN SSD1306I2C IS TRUE
+    SSD1306I2C:
+        help: >
+            If enabled, the ssd1306 will use the i2c interface. IT CAN'T BE TRUE WHEN SSD1306SPI IS TRUE

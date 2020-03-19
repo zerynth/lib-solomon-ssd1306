@@ -8,10 +8,27 @@ SSD1306 Module
 This Module exposes all functionalities of Solomon SSD1306 OLED Display driver (`datasheet <https://www.olimex.com/Products/Modules/LCD/MOD-OLED-128x64/resources/SSD1306.pdf>`_).
 
 
-    """
+"""
+
+#-if SSD1306SPI
+##-if SSD1306I2C
+raise UnsupportedError
+##-endif
+#-endif
 
 
+#-if SSD1306SPI
 import spi
+#-else
+##-if SSD1306I2C
+import i2c
+# i2c constants
+SSD1306_I2C_ADDRESS      = 0x1E    # SLAVE ADDRESS IS (011110+SA0). SEND MESSAGE TO SLAVE ADDRESS + ReadWrite bit
+COMMAND_CODE             = 0x00
+DATA_CODE                = 0x40
+##-endif
+#-endif
+
 
 # Constants
 SETCONTRAST              = 0x81
@@ -67,11 +84,15 @@ OLED_TEXT_ALIGN = [
     OLED_TEXT_VALIGN_CENTER
 ]
 
+
+#-if SSD1306SPI
 class SSD1306(spi.Spi):
     """
 .. class: SSD1306(drv, cs, rst, dc, clock=8000000):
 
-    Creates an intance of a new SSD1306.
+    Creates an intance of a new SSD1306 using SPI.
+
+    SSD1306SPI must be set to 'true' in the configuration yml
 
     :param spidrv: SPI Bus used '( SPI0, ... )'
     :param cs: Chip Select
@@ -85,7 +106,7 @@ class SSD1306(spi.Spi):
 
         ...
 
-        oled = ssd1306.SSD1306(SPI0,D17,D16,D6)
+        oled = ssd1306.SSD1306SPI(SPI0,D17,D16,D6)
         oled.init()
         oled.on()
     """
@@ -93,6 +114,9 @@ class SSD1306(spi.Spi):
         spi.Spi.__init__(self,cs,drv,clock)
         self.dc=dc
         self.rst=rst
+        pinMode(self.dc,OUTPUT)
+        pinMode(self.rst,OUTPUT)
+        self._reset()
         self.font_init = False
         self.dynamic_area = {
             "x": 0,
@@ -101,31 +125,101 @@ class SSD1306(spi.Spi):
             "height": 0,
             "buffer": None
         }
-        pinMode(self.dc,OUTPUT)
-        pinMode(self.rst,OUTPUT)
-        self._reset()
         self.buf = bytearray(1)
         self.c_buf = None
-  
-    def _reset(self):
-        digitalWrite(self.rst,0)
-        sleep(2)
-        digitalWrite(self.rst,1)
-        sleep(2)
-        
+
     def _command(self,cmd):
         self.select()
         digitalWrite(self.dc,0)
         self.buf[0]=cmd
         self.write(self.buf)
         self.unselect()
-        
-    def _data(self,data):
-        self.select()
-        digitalWrite(self.dc,1)
-        self.buf[0]=data
-        self.write(self.buf)
-        self.unselect()
+
+    def _send_data(self):
+        for page in range(0,self._screen_pages):
+            self._set_column(self._column_offset)
+            self._set_page(page)            
+            self.select()
+            digitalWrite(self.dc,1)
+            self.write(self._buf_display[page*self._screen_width:((page+1)*self._screen_width)])
+            self.unselect()
+            
+    def _reset(self):
+        digitalWrite(self.rst,0)
+        sleep(2)
+        digitalWrite(self.rst,1)
+        sleep(2)
+#-else
+##-if SSD1306I2C
+class SSD1306(i2c.I2C):
+    """
+.. class: SSD1306(drv, rst, clock=400000):
+
+    Creates an intance of a new SSD1306 using I2C.
+    
+    SSD1306I2C must be set to 'true' in the configuration yml
+
+    :param drv: I2C Bus used '( I2C0, ... )'
+    :param rst: Reset pin, optional
+    :param sa0: Device address bit, default 0
+    :param clk: Clock speed, default 400kHz
+
+    Example: ::
+
+        from solomon.ssd1306 import ssd1306
+
+        ...
+
+        oled = ssd1306.SSD1306(I2C0,rst=D17,clock=400000)
+        oled.init()
+        oled.on(
+    """
+    def __init__(self, drv, rst=None, sa0=0, clock=400000):
+        self.SA0 = sa0
+        self.rst=rst
+        i2c.I2C.__init__(self, drv, (SSD1306_I2C_ADDRESS << 1) | self.SA0, clock)
+        try:
+            self.start()
+        except PeripheralError as e:
+            print(e)
+        if self.rst is not None:
+            pinMode(self.rst,OUTPUT)
+            self._reset()
+        self.font_init = False
+        self.dynamic_area = {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0,
+            "buffer": None
+        }
+        self.buf = bytearray(1)
+        self.c_buf = None
+
+    def _command(self, cmd):
+        self.buf[0]=cmd
+        _to_send = bytearray(2)
+        _to_send[0]=COMMAND_CODE
+        _to_send[1]=self.buf[0]
+        self.write(_to_send)
+
+    def _send_data(self):
+        _to_send=bytearray(self._screen_width + 1)
+        _to_send[0]=DATA_CODE
+        for page in range(0,self._screen_pages):
+            self._set_column(self._column_offset)
+            self._set_page(page)
+            _to_send[1:]=self._buf_display[page*self._screen_width:((page+1)*self._screen_width)]
+            self.write(_to_send)
+    
+    def _reset(self):
+        if self.rst is not None:
+            digitalWrite(self.rst,0)
+            sleep(2)
+            digitalWrite(self.rst,1)
+            sleep(2)
+##-endif
+#-endif
 
     def _set_page(self,page):
         page=0xb0|page;
@@ -176,6 +270,7 @@ class SSD1306(spi.Spi):
         :param screen_height: height in pixels of the display (max 64); default 40
         
         """
+
         if screen_width > 128 or screen_height > 64:
             raise ValueError
         self._screen_width = screen_width
@@ -365,15 +460,6 @@ class SSD1306(spi.Spi):
         self._command(SETCONTRAST)
         self._command(contrast)
     
-    def _send_data(self):
-        for page in range(0,self._screen_pages):
-            self._set_column(self._column_offset)
-            self._set_page(page)            
-            self.select()
-            digitalWrite(self.dc,1)
-            self.write(self._buf_display[page*self._screen_width:((page+1)*self._screen_width)])
-            self.unselect()
-    
     def clear(self):
         """
 
@@ -417,7 +503,7 @@ class SSD1306(spi.Spi):
 
         """
         self._check_coordinates(x,y,w,h)    
-        self._prapare(x,y,w,h,fill)
+        self._prepare(x,y,w,h,fill)
         self._send_data()
         
     def draw_img(self, bytes, x, y, w, h, fill=True):
