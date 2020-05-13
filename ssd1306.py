@@ -607,10 +607,14 @@ class SSD1306(i2c.I2C):
         count = 0
         for ypix in range(0,self.dynamic_area["height"]):
             for xpix in range(0,self.dynamic_area["width"]):
+                bb = 0xFF << ((y+ypix)%8) & 0xFF
+                if (y+ypix+1)%8 != 0:
+                    bb &= 0xFF >> (8-((y+ypix+1)%8)) & 0xFF
                 if self.dynamic_area["buffer"][count]:
-                    self._prepare(x+xpix,y+ypix,1,1,True)
+                    self._buf_display[(((y+ypix)//8)*self._screen_width)+x+xpix] |= bb
                 else:
-                    self._prepare(x+xpix,y+ypix,1,1,False)
+                    bb = ~bb&0xFF
+                    self._buf_display[(((y+ypix)//8)*self._screen_width)+x+xpix] &= bb
                 count += 1
         self._send_data()
         self.dynamic_area["buffer"] = None
